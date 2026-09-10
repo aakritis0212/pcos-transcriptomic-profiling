@@ -64,3 +64,49 @@ st.plotly_chart(fig, use_container_width=True)
 # Data Table
 st.subheader("📋 Full GSEA Results Inspector")
 st.dataframe(gsea_results[['Term', 'ES', 'NES', 'FDR q-val', 'Lead_genes']], use_container_width=True)
+# ... [Your existing GSEA code up top] ...
+
+st.markdown("---")
+st.subheader("🌋 Differential Expression: Volcano Plot")
+
+# 1. Clean the data for the plot
+volcano_df = results_df.dropna(subset=['padj', 'log2FoldChange']).copy()
+import numpy as np # Make sure this is imported at the top of app.py!
+volcano_df['-log10(padj)'] = -np.log10(volcano_df['padj'] + 1e-300)
+
+# 2. Categorize genes
+def categorize_significance(row):
+    if row['padj'] < 0.05 and row['log2FoldChange'] > 1:
+        return 'Upregulated'
+    elif row['padj'] < 0.05 and row['log2FoldChange'] < -1:
+        return 'Downregulated'
+    else:
+        return 'Not Significant'
+
+volcano_df['Significance'] = volcano_df.apply(categorize_significance, axis=1)
+
+# 3. Build the Plotly figure
+fig_volcano = px.scatter(
+    volcano_df,
+    x='log2FoldChange',
+    y='-log10(padj)',
+    color='Significance',
+    color_discrete_map={
+        'Upregulated': '#EF553B',
+        'Downregulated': '#636EFA',
+        'Not Significant': '#E5E5E5'
+    },
+    hover_name=volcano_df['Gene_Name'], 
+    labels={
+        'log2FoldChange': 'Log2 Fold Change',
+        '-log10(padj)': '-Log10(Adjusted P-value)'
+    }
+)
+
+# Add threshold lines
+fig_volcano.add_hline(y=-np.log10(0.05), line_dash="dash", line_color="black")
+fig_volcano.add_vline(x=1, line_dash="dash", line_color="black")
+fig_volcano.add_vline(x=-1, line_dash="dash", line_color="black")
+
+# 4. Display in Streamlit instead of fig.show()
+st.plotly_chart(fig_volcano, use_container_width=True)
