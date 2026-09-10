@@ -5,11 +5,12 @@ import plotly.express as px
 
 st.set_page_config(page_title="PCOS Transcriptomics", layout="wide")
 st.title("🧬 PCOS Transcriptomic Profiling & Enrichment Dashboard")
-st.markdown("Transcriptomic analysis of Polycystic Ovary Syndrome (PCOS) evaluating differential expression and Gene Ontology (GO) pathway shifts.")
+st.markdown("Transcriptomic analysis of Polycystic Ovary Syndrome (PCOS) evaluating differential expression, Gene Ontology (GO) pathway shifts, and upstream regulatory networks.")
 
-# Load Cached Data
+# --- DATA LOADING ---
 @st.cache_data
 def load_data():
+    # 1. Load raw DESeq2 data and annotations
     results_df = pd.read_csv("pcos_deseq2_results.csv", index_col=0)
     annot_df = pd.read_csv("Human.GRCh38.p13.annot.tsv", sep='\t', dtype=str)
     
@@ -18,12 +19,15 @@ def load_data():
     results_df = results_df.merge(annot_df[['GeneID', 'Symbol']], on='GeneID', how='left')
     results_df['Gene_Name'] = results_df['Symbol'].fillna(results_df['GeneID'])
     
+    # 2. Load pre-calculated GSEA and TF data
     gsea_results = pd.read_csv("gsea_results_precalculated.csv")
-    return results_df, gsea_results
+    tf_results = pd.read_csv("tf_screening_results.csv")
+    
+    return results_df, gsea_results, tf_results
 
-results_df, gsea_results = load_data()
+results_df, gsea_results, tf_results = load_data()
 
-# Prepare clean DESeq2 data
+# Prepare clean DESeq2 data for gene-level plots
 de_df = results_df.dropna(subset=['padj', 'log2FoldChange', 'baseMean']).copy()
 de_df['-log10(padj)'] = -np.log10(de_df['padj'] + 1e-300)
 
@@ -37,12 +41,17 @@ def categorize_significance(row):
 
 de_df['Significance'] = de_df.apply(categorize_significance, axis=1)
 
-# Tabbed Interface
-tab1, tab2, tab3 = st.tabs(["📊 DESeq2 Gene Level", "🧬 GSEA Pathway Level", "📋 Data Inspector"])
+# --- DASHBOARD TABS ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 DESeq2 Gene Level", 
+    "🧬 GSEA Pathway Level", 
+    "⚙️ Master Regulators (TFs)", 
+    "📋 Data Inspector"
+])
 
 # --- TAB 1: DESeq2 GENE LEVEL ---
 with tab1:
-    st.subheader("🌋 Volcano Plot")
+    st.subheader("🌋 Differential Expression: Volcano Plot")
     fig_volcano = px.scatter(
         de_df,
         x='log2FoldChange',
@@ -86,7 +95,7 @@ with tab1:
         st.plotly_chart(fig_ma, use_container_width=True)
 
     with col2:
-        st.subheader("🏆 Top 20 Differentially Expressed Genes")
+        st.subheader("🏆 Top 20 Significant Genes")
         sig_genes = de_df[de_df['padj'] < 0.05].copy()
         top_20 = sig_genes.sort_values(by='padj', ascending=True).head(20).sort_values(by='log2FoldChange', ascending=True)
         
@@ -108,7 +117,7 @@ with tab2:
     sig_results['Abs_NES'] = sig_results['NES'].abs()
     top_pathways = sig_results.sort_values(by='Abs_NES', ascending=False).head(15)
 
-    st.subheader("📊 Top Enriched Biological Processes (NES)")
+    st.subheader("📊 Top Enriched Biological Processes (FDR < 0.05)")
     fig_bar = px.bar(
         top_pathways,
         x="NES",
@@ -122,7 +131,7 @@ with tab2:
     st.plotly_chart(fig_bar, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("🫧 GSEA Pathway Bubble Plot")
+    st.subheader("🫧 Pathway Bubble Plot")
     sig_results['Gene_Count'] = sig_results['Lead_genes'].apply(lambda x: len(str(x).split(';')))
     top_bubbles = sig_results.sort_values(by='Abs_NES', ascending=False).head(15)
 
@@ -139,8 +148,29 @@ with tab2:
     fig_bubble.update_layout(yaxis={'categoryorder':'total ascending'}, height=450)
     st.plotly_chart(fig_bubble, use_container_width=True)
 
-# --- TAB 3: DATA INSPECTOR ---
+# --- TAB 3: MASTER REGULATORS (TFs) ---
 with tab3:
+    st.subheader("⚙️ Upstream Transcription Factor Screening")
+    st.markdown("Identifies the master regulatory switches driving the observed transcriptomic shifts (ChIP-X Database).")
+    
+    sig_tfs = tf_results[tf_results['FDR q-val'] < 0.05].copy()
+    sig_tfs['Abs_NES'] = sig_tfs['NES'].abs()
+    top_tfs = sig_tfs.sort_values(by='Abs_NES', ascending=False).head(15)
+
+    fig_tf = px.bar(
+        top_tfs,
+        x="NES",
+        y="Term",
+        orientation='h',
+        color="FDR q-val",
+        color_continuous_scale="Cividis",
+        labels={'NES': 'Normalized Enrichment Score', 'Term': 'Transcription Factor'}
+    )
+    fig_tf.update_layout(yaxis={'categoryorder':'total ascending'}, height=500)
+    st.plotly_chart(fig_tf, use_container_width=True)
+
+# --- TAB 4: DATA INSPECTOR ---
+with tab4:
     st.subheader("📋 GSEA Pathway Results")
     st.dataframe(gsea_results[['Term', 'ES', 'NES', 'FDR q-val', 'Lead_genes']], use_container_width=True)
     
