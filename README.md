@@ -59,12 +59,9 @@ Visualization: Plotly Express, NetworkX, Streamlit
 
 ├── GSE168404_mRNA_C-vs-P.all.txt   # Raw, UTF-16 validated mRNA count matrix
 ├── Human.GRCh38.p13.annot.tsv      # Gene ID to HUGO symbol mapping reference
-│
-# --- PHASE 1: LOCAL STATISTICAL PIPELINE (Do not run on cloud) ---
 ├── differentialexpression.py       # Cleans data, runs PyDESeq2, outputs DESeq2 stats
 ├── enrichmentanalysis.py           # Runs GSEA for GO Pathways and TF ChIP-X screening
 │
-# --- PHASE 2: STREAMLIT DASHBOARD DEPLOYMENT ---
 ├── appy.py                         # The main Streamlit dashboard application
 ├── pcos_deseq2_results.csv         # PRE-CALCULATED: DESeq2 output
 ├── gsea_results_precalculated.csv  # PRE-CALCULATED: Pathway enrichment output
